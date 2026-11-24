@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>桌游计时器 Game Clock</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#14161A">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm table-side instrument, big digits, zero clutter
+   IDEA: a multi-player chess clock lying on the game table
+   PICTURE: the clock panels themselves, filled with each player's colour
+   COLOUR and TYPE: dark felt ground, player colours lead, amber for actions; Inter digits
+   LAYOUT: setup = one column; game = split / ring / list, controls in the middle */
+:root{color-scheme:light dark;--bg:light-dark(#F1F2F4,#14161A);--card:light-dark(#FFFFFF,#1C1F25);--card2:light-dark(#E6E8EC,#23262D);--line:light-dark(#D3D6DC,#2E323A);--ink:light-dark(#14161A,#ECEEF2);--mute:light-dark(#5A616D,#9AA1AD);--acc:#F5A524;--accInk:#14161A;--bad:#E5484D}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.45 Inter,'Noto Sans SC',system-ui,sans-serif;overflow-x:clip;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.setup{max-width:640px;margin:0 auto;padding:16px 16px 110px;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{margin:0;font-size:24px;line-height:1.1}h1 small{font-size:13px;color:var(--mute);font-weight:400;margin-left:6px}
+.seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:8px 14px;min-height:40px;color:var(--mute)}
+.seg button.on{background:var(--acc);color:var(--accInk);font-weight:700}
+.lbl{font-size:13px;color:var(--mute);margin-bottom:8px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.grid{display:grid;gap:6px}
+.chip{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--mute);padding:6px 8px;font-size:14px;line-height:1.2}
+.chip.on{background:var(--acc);border-color:var(--acc);color:var(--accInk);font-weight:700}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.tin{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.tin input{width:64px;height:40px;text-align:center;border:1px solid var(--line);border-radius:8px;background:var(--card2);font-size:16px;font-weight:600}
+.hint{font-size:12px;color:var(--mute);margin-top:6px}
+.pl{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pl:last-child{border-bottom:0}
+.dot{width:36px;height:36px;border-radius:50%;border:2px solid var(--line);flex:none;padding:0}
+.pl input.nm{flex:1 1 120px;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--card2);padding:0 10px;font-size:16px}
+.pl input.hc{width:70px;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--card2);text-align:center;font-size:16px}
+.mini{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--card2);flex:none}
+.pal{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;width:100%;padding:6px 0 4px}
+.pal button{aspect-ratio:1;border-radius:50%;border:2px solid var(--line);position:relative}
+.pal button.on{outline:3px solid var(--acc);outline-offset:1px}
+.pal button.used::after{content:'';position:absolute;inset:38%;border-radius:50%;background:currentColor;opacity:.7}
+.pal label{grid-column:span 8;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}
+.pal input[type=color]{width:44px;height:32px;border:0;background:none;padding:0}
+.presets{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.presets .chip{flex:none;display:flex;align-items:center;gap:6px}
+.presets .x{color:var(--bad);font-weight:700;padding-left:4px}
+.save{display:flex;gap:6px;margin-top:8px}
+.save input{flex:1;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--card2);padding:0 10px;font-size:16px}
+.tg{display:flex;align-items:center;gap:8px;font-size:14px}
+.tg input{width:22px;height:22px;accent-color:var(--acc)}
+.startbar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+.big{display:block;width:100%;max-width:608px;margin:0 auto;height:58px;border:0;border-radius:16px;background:var(--acc);color:var(--accInk);font-size:19px;font-weight:800}
+/* game */
+.game{position:fixed;inset:0;display:flex;flex-direction:column;gap:8px;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));user-select:none;-webkit-user-select:none}
+.prow{flex:1;display:flex;gap:8px}
+.panel{flex:1;border-radius:20px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px;position:relative;overflow:hidden;text-align:center;cursor:pointer}
+.panel .cbar{position:absolute;left:0;right:0;top:0;height:8px;background:var(--c)}
+.panel.flip{transform:rotate(180deg)}
+.panel.act{background:var(--c);color:var(--fg);border-color:var(--c)}
+.panel.act .cbar{display:none}
+.panel.out,.panel.skip{opacity:.4}
+.pname{font-size:clamp(14px,2.6vmin,20px);font-weight:600}
+.ptime{font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;font-size:var(--ts,12vmin);white-space:nowrap}
+.psub{font-size:clamp(12px,2.2vmin,16px);opacity:.85;white-space:nowrap}
+.low .ptime{color:var(--bad)}.act.low .ptime{color:var(--fg);animation:pulse 1s infinite}
+.neg .ptime{color:var(--bad)}.act.neg{background:var(--bad);color:#fff}
+@keyframes pulse{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.act.low .ptime{animation:none;text-decoration:underline}}
+.ctrl{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;align-items:center}
+.ctrl button{min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card2);font-size:14px}
+.ctrl .info{font-size:13px;color:var(--mute);padding:0 6px;white-space:nowrap}
+.list{flex:1;display:flex;flex-direction:column;gap:8px;overflow:auto}
+.lrow{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;min-height:56px}
+.lrow .d{width:14px;height:14px;border-radius:50%;background:var(--c);flex:none}
+.lrow .n{flex:1;font-size:16px}
+.lrow .t{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.lrow.out,.lrow.skip{opacity:.45}
+.next{height:clamp(84px,14vh,130px);border:0;border-radius:20px;background:var(--acc);color:var(--accInk);font-size:24px;font-weight:800;line-height:1.15}
+.next small{display:block;font-size:14px;font-weight:600}
+.ov{position:fixed;inset:0;background:rgba(10,11,14,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}
+.dlg{background:var(--card);color:var(--ink);border-radius:20px;padding:18px;width:min(460px,100%);max-height:88vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.dlg h2{margin:0;font-size:20px}
+.dlg .acts{display:flex;gap:8px;flex-wrap:wrap}
+.dlg .acts button{flex:1 1 120px;min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-weight:600}
+.dlg .acts button.pri{background:var(--acc);border-color:var(--acc);color:var(--accInk)}
+.adj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+.adj .n{flex:1 1 100%;display:flex;align-items:center;gap:8px;font-weight:600}
+.adj .n b{margin-left:auto;font-variant-numeric:tabular-nums}
+.adj button{flex:1;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card2)}
+.flash{animation:fl .5s 3}@keyframes fl{50%{filter:brightness(1.8)}}
+/* summary */
+.sum{max-width:640px;margin:0 auto;padding:18px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.kp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.kp div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.kp span{font-size:12px;color:var(--mute)}.kp b{display:block;font-size:17px;margin-top:2px}
+.sc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.sc.lost{border-color:var(--bad)}
+.sc .h{display:flex;align-items:center;gap:10px}.sc .h .n{flex:1;font-weight:700}.sc .h b{font-size:19px;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:var(--card2)}.bar i{display:block;height:6px;border-radius:3px;background:var(--c)}
+.sc .m{font-size:13px;color:var(--mute)}
+.tag{font-size:12px;color:var(--bad);font-weight:600;margin-left:6px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+{
+const T={zh:{title:'桌游计时器',players:'人数',mode:'计时模式',params:'时间设置',timeout:'超时处理',plist:'玩家、颜色与顺序',plHint:'名字可不填；颜色点圆点选；最右是让时（分钟，空白=默认）；↑↓ 调整顺序',layout:'3 人以上布局',list:'列表',ring:'环形',opts:'提醒',sound:'提示音',voice:'最后10秒报数',vib:'震动',start:'开始',presets:'预设',savePre:'存为预设',preName:'预设名称',save:'保存',
+abs:'包干',fis:'加秒',byo:'读秒',can:'加拿大读秒',bro:'Bronstein 延时',del:'简单延时',turn:'每回合限时',
+absD:'时间用完即超时',fisD:'每走完一回合加时间',byoD:'基本时间用完后进入读秒，在一次读秒内走完不扣次数',canD:'基本时间用完后，每段时间内要走完指定回合数',broD:'每回合用多少补回多少，最多补延时秒数',delD:'每回合先等延时秒数才开始扣时间',turnD:'每回合重新计时，适合单人或快节奏桌游',
+main:'基本时间',inc:'每回合加',periods:'读秒次数',psec:'每次秒数',blk:'每段时间',mv:'每段回合数',dly:'延时',tsec:'每回合时间',min:'分',sec:'秒',
+lose:'判负出局',neg:'继续负时',alert:'只提醒',loseD:'超时的玩家出局，其他人继续，只剩 1 人时结束',negD:'时间变成负数继续，总结里显示超时多少',alertD:'响提示后照常继续',
+player:'玩家',pause:'暂停',resume:'继续',adjust:'调时',order:'顺序',lay:'布局',end:'结束',snd:'声音',tapStart:'点击开始',first:'先手',paused:'已暂停',yourTurn:'轮到你',tapEnd:'点击结束回合',now:'轮到',upnext:'接下来',nextBtn:'下一位',thisTurn:'本回合',round:'回合',out:'出局',skip:'跳过',over:'超时',left:'剩',
+orderT:'回合顺序',setNext:'设为下一位',skipT:'跳过',close:'关闭',adjT:'调整时间',endQ:'结束这一局？',endY:'结束并看总结',cancel:'取消',
+sumT:'本局总结',total:'总长',turns:'回合',avg:'平均',longest:'最长',remain:'剩余',fast:'最快',slow:'最慢',back:'返回设置',again:'再来一局',lostT:'超时判负',otT:'超时',pUsed:'用了读秒',times:'次',people:'人',hist:'记录',histT:'对局记录',noHist:'还没有记录。每局结束会自动保存在这台设备。',copy:'复制文字',copied:'已复制',csv:'下载 CSV',dlAll:'全部下载 CSV',clearAll:'全部删除',clearQ:'再按一次确认',del:'删除',dlFail:'没有下载',dlHost:'这个 app 不能下载，请用浏览器打开',saved:'已存到本机记录',game:'游戏'},
+en:{title:'Game Clock',players:'Players',mode:'Mode',params:'Time',timeout:'On timeout',plist:'Players, colours & order',plHint:'Names optional; tap the dot for a colour; last box = handicap (min, blank = default); ↑↓ to reorder',layout:'Layout (3+ players)',list:'List',ring:'Ring',opts:'Alerts',sound:'Beeps',voice:'Count last 10s',vib:'Vibrate',start:'Start',presets:'Presets',savePre:'Save preset',preName:'Preset name',save:'Save',
+abs:'Absolute',fis:'Fischer',byo:'Byo-yomi',can:'Canadian',bro:'Bronstein',del:'Simple delay',turn:'Per-turn',
+absD:'Time runs out = timeout',fisD:'Add time after each turn',byoD:'After main time, periods; finish within one and keep it',canD:'After main time, play N turns within each block',broD:'Get back time used, up to the delay',delD:'Clock waits the delay before counting',turnD:'Fresh timer every turn — solo or fast games',
+main:'Main time',inc:'Increment',periods:'Periods',psec:'Seconds each',blk:'Block time',mv:'Turns per block',dly:'Delay',tsec:'Time per turn',min:'m',sec:'s',
+lose:'Lose (out)',neg:'Go negative',alert:'Alert only',loseD:'Player is out, others continue; ends when 1 left',negD:'Clock goes negative; summary shows overtime',alertD:'Beep, then carry on',
+player:'P',pause:'Pause',resume:'Resume',adjust:'± Time',order:'Order',lay:'Layout',end:'End',snd:'Sound',tapStart:'Tap to start',first:'First',paused:'Paused',yourTurn:'your turn',tapEnd:'tap to end turn',now:'Now',upnext:'Up next',nextBtn:'Next',thisTurn:'This turn',round:'Turn',out:'Out',skip:'Skipped',over:'Over',left:'left',
+orderT:'Turn order',setNext:'Next',skipT:'Skip',close:'Close',adjT:'Adjust time',endQ:'End this game?',endY:'End & summary',cancel:'Cancel',
+sumT:'Game summary',total:'Length',turns:'turns',avg:'avg',longest:'longest',remain:'left',fast:'Fastest',slow:'Slowest',back:'Setup',again:'Rematch',lostT:'Lost on time',otT:'Overtime',pUsed:'periods used',times:'',people:'players',hist:'History',histT:'Game history',noHist:'No games yet. Each finished game is saved on this device.',copy:'Copy text',copied:'Copied',csv:'Download CSV',dlAll:'Download all CSV',clearAll:'Delete all',clearQ:'Tap again to confirm',del:'Delete',dlFail:'Not downloaded',dlHost:'This app cannot save files; open in a browser',saved:'Saved to history on this device',game:'Game'}};
+const MODES=['abs','fis','byo','can','bro','del','turn'];
+const PAL=[['#E5484D','红','Red'],['#3E7BFA','蓝','Blue'],['#30A46C','绿','Green'],['#F5D90A','黄','Yellow'],['#1A1A1A','黑','Black'],['#F2F2F2','白','White'],['#F76B15','橙','Orange'],['#8E4EC6','紫','Purple'],['#E93D82','粉','Pink'],['#8D5A3B','棕','Brown'],['#8B8D98','灰','Grey'],['#12A594','青','Teal'],['#4CC3F5','天蓝','Sky'],['#9B1C31','酒红','Maroon'],['#8DB600','草绿','Lime'],['#D4A72C','金','Gold']];
+const DEF={lang:'zh',n:2,mode:'byo',main:1200,inc:10,periods:3,psec:30,blk:300,mv:20,dly:5,tsec:60,timeout:'lose',layout:'auto',sound:true,voice:true,vib:true,players:PAL.slice(0,6).map(c=>({name:'',color:c[0],hc:''}))};
+const BUILTIN=[{name:'围棋 Go 20分+3×30秒',cfg:{n:2,mode:'byo',main:1200,periods:3,psec:30,timeout:'lose'}},{name:'Chess 5+3',cfg:{n:2,mode:'fis',main:300,inc:3,timeout:'lose'}},{name:'桌游 4人 每回合60秒',cfg:{n:4,mode:'turn',tsec:60,timeout:'alert'}},{name:'Catan 4P 30min',cfg:{n:4,mode:'abs',main:1800,timeout:'neg'}}];
+const ls={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let cfg=Object.assign(JSON.parse(JSON.stringify(DEF)),ls.get('bgc.cfg',{}));
+if(!cfg.players||cfg.players.length<6)cfg.players=DEF.players;
+let presets=ls.get('bgc.presets',[]);
+let hist=ls.get('bgc.hist',[]),clearArm=false,lastRec=null,dlNS=null;
+const dlP=(window.claude&&window.claude.use)?Promise.resolve(window.claude.use('downloads')).catch(()=>null):Promise.resolve('local');
+dlP.then(x=>{dlNS=x;document.querySelectorAll('[data-dl]').forEach(e=>e.hidden=!dlNS)});
+let palOpen=-1,g=null,timer=null,wl=null,ac=null,dialog=null;
+const app=document.getElementById('app');
+const t=k=>T[cfg.lang][k]??k;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fg=hex=>{const n=parseInt(hex.slice(1),16),r=n>>16&255,gg=n>>8&255,b=n&255;return (0.299*r+0.587*gg+0.114*b)>150?'#14161A':'#FFFFFF'};
+const fmt=ms=>{const neg=ms<0;let a=Math.abs(ms);let s;if(!neg&&a<10000&&a>0){s=(Math.floor(a/100)/10).toFixed(1)}else{const tot=neg?Math.floor(a/1000):Math.ceil(a/1000),h=Math.floor(tot/3600),m=Math.floor(tot%3600/60),se=tot%60;s=(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(se).padStart(2,'0')}return (neg?'-':'')+s};
+const saveCfg=()=>ls.set('bgc.cfg',cfg);
+const dname=i=>cfg.players[i].name.trim()||(cfg.lang==='zh'?t('player')+(i+1):t('player')+(i+1));
+const tIn=(k)=>{const v=cfg[k];return `<span class="tin"><input inputmode="numeric" data-tm="${k}" data-part="m" value="${Math.floor(v/60)}" aria-label="${t(k)} ${t('min')}">${t('min')}<input inputmode="numeric" data-tm="${k}" data-part="s" value="${v%60}" aria-label="${t(k)} ${t('sec')}">${t('sec')}</span>`};
+const nIn=(k,u)=>`<span class="tin"><input inputmode="numeric" data-num="${k}" value="${cfg[k]}" aria-label="${t(k)}">${u||''}</span>`;
+function params(){const m=cfg.mode,r=[];
+ if(m!=='turn')r.push([t('main'),tIn('main')]);
+ if(m==='fis')r.push([t('inc'),nIn('inc',t('sec'))]);
+ if(m==='byo'){r.push([t('periods'),nIn('periods','×')]);r.push([t('psec'),nIn('psec',t('sec'))])}
+ if(m==='can'){r.push([t('blk'),tIn('blk')]);r.push([t('mv'),nIn('mv')])}
+ if(m==='bro'||m==='del')r.push([t('dly'),nIn('dly',t('sec'))]);
+ if(m==='turn')r.push([t('tsec'),tIn('tsec')]);
+ return r.map(x=>`<div class="row"><span>${x[0]}</span>${x[1]}</div>`).join('')}
+function renderSetup(){
+ stopTick();document.documentElement.lang=cfg.lang==='zh'?'zh':'en';document.title=t('title');
+ const n=cfg.n,used=cfg.players.slice(0,n).map(p=>p.color);
+ app.innerHTML=`<div class="setup">
+ <div class="top"><h1>${t('title')}<small>${cfg.lang==='zh'?'Game Clock':'桌游计时器'}</small></h1>
+ <div style="display:flex;gap:6px"><button class="chip" data-act="h-open">${t('hist')}${hist.length?' '+hist.length:''}</button><div class="seg"><button data-act="lang" data-v="zh" class="${cfg.lang==='zh'?'on':''}">中</button><button data-act="lang" data-v="en" class="${cfg.lang==='en'?'on':''}">EN</button></div></div></div>
+ <section><div class="lbl">${t('presets')}</div><div class="presets">
+ ${BUILTIN.map((p,i)=>`<button class="chip" data-act="bpre" data-i="${i}">${esc(p.name)}</button>`).join('')}
+ ${presets.map((p,i)=>`<span class="chip"><button style="border:0;background:none;padding:0" data-act="upre" data-i="${i}">★ ${esc(p.name)}</button><button class="x" style="border:0;background:none" data-act="dpre" data-i="${i}" aria-label="delete">×</button></span>`).join('')}
+ </div><div class="save"><input id="pname" placeholder="${t('preName')}" maxlength="30"><button class="chip" data-act="spre">${t('savePre')}</button></div></section>
+ <section><div class="lbl">${t('players')}</div><div class="grid" style="grid-template-columns:repeat(6,minmax(0,1fr))">
+ ${[1,2,3,4,5,6].map(i=>`<button class="chip ${n===i?'on':''}" data-act="n" data-v="${i}" style="font-size:17px">${i}</button>`).join('')}</div></section>
+ <section><div class="lbl">${t('mode')}</div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(96px,1fr))">
+ ${MODES.map(m=>`<button class="chip ${cfg.mode===m?'on':''}" data-act="mode" data-v="${m}">${t(m)}</button>`).join('')}</div>
+ <div class="hint">${t(cfg.mode+'D')}</div></section>
+ <section><div class="lbl">${t('params')}</div><div class="box">${params()}</div></section>
+ <section><div class="lbl">${t('timeout')}</div><div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+ ${['lose','neg','alert'].map(m=>`<button class="chip ${cfg.timeout===m?'on':''}" data-act="to" data-v="${m}">${t(m)}</button>`).join('')}</div><div class="hint">${t(cfg.timeout+'D')}</div></section>
+ <section><div class="lbl"><span>${t('plist')}</span></div><div class="box">
+ ${cfg.players.slice(0,n).map((p,i)=>`<div class="pl">
+  <button class="dot" style="background:${p.color}" data-act="pal" data-i="${i}" aria-label="colour ${i+1}"></button>
+  <input class="nm" data-name="${i}" value="${esc(p.name)}" placeholder="${t('player')}${i+1}" maxlength="16">
+  ${cfg.mode!=='turn'?`<input class="hc" inputmode="decimal" data-hc="${i}" value="${esc(p.hc)}" placeholder="${Math.round(cfg.main/6)/10}" aria-label="handicap minutes">`:''}
+  <button class="mini" data-act="up" data-i="${i}" aria-label="up" ${i===0?'disabled':''}>↑</button><button class="mini" data-act="down" data-i="${i}" aria-label="down" ${i===n-1?'disabled':''}>↓</button>
+  ${palOpen===i?`<div class="pal">${PAL.map(c=>`<button style="background:${c[0]};color:${fg(c[0])}" class="${p.color===c[0]?'on':''} ${used.includes(c[0])&&p.color!==c[0]?'used':''}" data-act="col" data-i="${i}" data-v="${c[0]}" aria-label="${cfg.lang==='zh'?c[1]:c[2]}"></button>`).join('')}
+  <label>${cfg.lang==='zh'?'自定义颜色':'Custom'} <input type="color" data-cc="${i}" value="${p.color}"></label></div>`:''}
+ </div>`).join('')}</div><div class="hint">${t('plHint')}</div></section>
+ ${n>=3?`<section><div class="lbl">${t('layout')}</div><div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+ ${['list','ring'].map(m=>`<button class="chip ${curLayout()===m?'on':''}" data-act="lay" data-v="${m}">${t(m)}</button>`).join('')}</div></section>`:''}
+ <section><div class="lbl">${t('opts')}</div><div class="box" style="display:flex;gap:16px;flex-wrap:wrap;padding:12px 14px">
+ ${['sound','voice','vib'].map(k=>`<label class="tg"><input type="checkbox" data-chk="${k}" ${cfg[k]?'checked':''}>${t(k)}</label>`).join('')}</div></section>
+ </div><div class="startbar"><button class="big" data-act="start">${t('start')} · ${n}${cfg.lang==='zh'?'人':'P'} · ${t(cfg.mode)}</button></div>`}
+const curLayout=()=>cfg.layout==='auto'?(innerWidth>=700?'ring':'list'):cfg.layout;
+function swapColor(i,c){const n=cfg.n,j=cfg.players.slice(0,n).findIndex((p,k)=>k!==i&&p.color===c);if(j>=0)cfg.players[j].color=cfg.players[i].color;cfg.players[i].color=c}
+app.addEventListener('input',e=>{const el=e.target,d=el.dataset;
+ if(d.name!==undefined){cfg.players[+d.name].name=el.value;saveCfg()}
+ else if(d.hc!==undefined){cfg.players[+d.hc].hc=el.value.replace(/[^\d.]/g,'');saveCfg()}
+ else if(d.tm){const box=el.closest('.tin').querySelectorAll('input'),m=parseInt(box[0].value)||0,s=parseInt(box[1].value)||0;cfg[d.tm]=Math.max(0,m*60+s);saveCfg()}
+ else if(d.num){cfg[d.num]=Math.max(0,parseInt(el.value)||0);saveCfg()}});
+app.addEventListener('change',e=>{const el=e.target,d=el.dataset;
+ if(d.chk){cfg[d.chk]=el.checked;saveCfg()}
+ if(d.cc!==undefined){swapColor(+d.cc,el.value.toUpperCase());saveCfg();renderSetup()}
+ if(d.tm||d.num||d.hc!==undefined)renderSetup()});
+app.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,v=b.dataset.v,i=+b.dataset.i;
+ const S={lang:()=>cfg.lang=v,n:()=>{cfg.n=+v;palOpen=-1;cfg.pname=''},mode:()=>{cfg.mode=v;cfg.pname=''},to:()=>cfg.timeout=v,lay:()=>cfg.layout=v,
+ pal:()=>palOpen=palOpen===i?-1:i,col:()=>{swapColor(i,v);palOpen=-1},
+ up:()=>{const p=cfg.players;[p[i-1],p[i]]=[p[i],p[i-1]];palOpen=-1},down:()=>{const p=cfg.players;[p[i+1],p[i]]=[p[i],p[i+1]];palOpen=-1},
+ bpre:()=>Object.assign(cfg,BUILTIN[i].cfg,{pname:BUILTIN[i].name}),upre:()=>{const pl=presets[i].cfg;Object.assign(cfg,JSON.parse(JSON.stringify(pl)),{lang:cfg.lang,pname:presets[i].name})},
+ dpre:()=>{presets.splice(i,1);ls.set('bgc.presets',presets)},
+ spre:()=>{const nm=(document.getElementById('pname').value||'').trim()||(t(cfg.mode)+' '+cfg.n+t('people'));const c=JSON.parse(JSON.stringify(cfg));delete c.lang;presets.push({name:nm,cfg:c});ls.set('bgc.presets',presets)},
+ start:()=>{startGame();return 'nr'}};
+ if(S[a]){const r=S[a]();saveCfg();if(r!=='nr'&&!g)renderSetup();return}
+ gameAct(a,b)});
+/* ---------- engine ---------- */
+function startGame(){
+ const n=cfg.n;
+ g={p:cfg.players.slice(0,n).map((pl,i)=>{const base=(pl.hc!==''&&!isNaN(parseFloat(pl.hc)))?parseFloat(pl.hc)*60000:cfg.main*1000;
+  return{seat:i,name:dname(i),color:pl.color,main:cfg.mode==='turn'?cfg.tsec*1000:base,start:base,byo:cfg.mode==='can'?cfg.blk*1000:cfg.psec*1000,periods:cfg.periods,moves:cfg.mv,used:0,turnEl:0,turns:0,longest:0,out:false,skip:false,tOut:false,timeouts:0,over:0,pUsed:0,lastSec:null}}),
+  order:[...Array(n).keys()],cur:0,running:false,started:false,turnCount:0,elapsed:0,last:0,nextOverride:null,layout:n===1?'solo':n===2?'split':curLayout()};
+ initAudio();lockWake();renderGame();}
+const curP=()=>g.p[g.order[g.cur]];
+const inOT=p=>(cfg.mode==='byo'||cfg.mode==='can')&&p.main<=0;
+const disp=p=>inOT(p)?p.byo:p.main;
+function consume(p,dt){
+ p.used+=dt;p.turnEl+=dt;const m=cfg.mode;
+ if(m==='del'){const over=p.turnEl-cfg.dly*1000;if(over>0)p.main-=Math.min(dt,over)}
+ else if(m==='byo'||m==='can'){
+  if(p.main>0){p.main-=dt;if(p.main<0){p.byo+=p.main;p.main=0}}else p.byo-=dt;
+  if(p.main<=0&&!p.tOut){if(m==='byo'){while(p.byo<=0&&p.periods>1){p.periods--;p.pUsed++;p.byo+=cfg.psec*1000}}
+   if(p.byo<=0)timeout(p)}
+  if(p.tOut&&p.byo<0)p.over=-p.byo}
+ else p.main-=dt;
+ if(!(m==='byo'||m==='can')){if(p.main<=0&&!p.tOut)timeout(p);if(p.tOut&&p.main<0)p.over=Math.max(p.over,-p.main)}}
+function timeout(p){p.tOut=true;p.timeouts++;beep(220,0.6);vib([300,120,300]);
+ const el=document.querySelector(`.panel[data-seat="${p.seat}"],.cur`);if(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1600)}
+ if(cfg.timeout==='lose'){p.out=true;const act=g.p.filter(x=>!x.out).length;if((g.p.length>1&&act<=1)||act===0){finish();return}advance();renderGame()}}
+function endTurn(){if(!g||!g.running)return;const p=curP(),m=cfg.mode;
+ if(m==='fis')p.main+=cfg.inc*1000;
+ if(m==='bro')p.main=Math.min(p.main+Math.min(p.turnEl,cfg.dly*1000),Math.max(p.main,p.start));
+ if(m==='turn'){p.main=cfg.tsec*1000;p.tOut=false}
+ if(m==='byo'&&inOT(p)&&!p.tOut)p.byo=cfg.psec*1000;
+ if(m==='can'&&inOT(p)&&!p.tOut){p.moves--;if(p.moves<=0){p.moves=cfg.mv;p.byo=cfg.blk*1000}}
+ p.turns++;p.longest=Math.max(p.longest,p.turnEl);p.turnEl=0;p.lastSec=null;g.turnCount++;
+ advance();vib(40);click();renderGame()}
+function advance(){const n=g.order.length;
+ if(g.nextOverride!==null){const pos=g.order.indexOf(g.nextOverride);g.nextOverride=null;if(pos>=0&&!g.p[g.order[pos]].out){g.cur=pos;return}}
+ for(const pass of [true,false])for(let k=1;k<=n;k++){const pos=(g.cur+k)%n,p=g.p[g.order[pos]];if(!p.out&&(!pass||!p.skip)){g.cur=pos;return}}}
+function tick(){const now=performance.now(),dt=now-g.last;g.last=now;if(!g.running)return;g.elapsed+=dt;const p=curP();consume(p,dt);if(!g)return;
+ const d=disp(p),s=Math.ceil(d/1000);if(d>0&&s<=10&&s!==p.lastSec){p.lastSec=s;cue(s)}
+ paint()}
+function startTick(){stopTick();g.last=performance.now();timer=setInterval(tick,100)}
+function stopTick(){if(timer)clearInterval(timer);timer=null}
+function run(){if(!g.started){g.started=true}g.running=true;dialog=null;startTick();lockWake();renderGame()}
+function pause(){g.running=false;stopTick();renderGame()}
+function finish(){g.running=false;stopTick();const p=g.started?curP():null;if(p&&p.turnEl>0){p.longest=Math.max(p.longest,p.turnEl)}dialog=null;lastRec=buildRec();hist.unshift(lastRec);if(hist.length>300)hist.length=300;ls.set('bgc.hist',hist);renderSummary()}
+/* ---------- audio / device ---------- */
+function initAudio(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){ac=null}}
+function beep(f=880,d=0.12){if(!cfg.sound||!ac)return;try{const o=ac.createOscillator(),gn=ac.createGain();o.frequency.value=f;gn.gain.setValueAtTime(0.25,ac.currentTime);gn.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);o.connect(gn).connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+const click=()=>beep(1200,0.04);
+function cue(s){if(!cfg.sound)return;if(cfg.voice&&'speechSynthesis' in window){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(s));u.lang=cfg.lang==='zh'?'zh-CN':'en-US';u.rate=1.3;speechSynthesis.speak(u);return}catch(e){}}beep(s<=3?1000:760,0.1)}
+function vib(p){if(cfg.vib&&navigator.vibrate)try{navigator.vibrate(p)}catch(e){}}
+async function lockWake(){try{if('wakeLock' in navigator&&!wl)wl=await navigator.wakeLock.request('screen');wl&&wl.addEventListener('release',()=>wl=null)}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&g)lockWake()});
+/* ---------- game view ---------- */
+function sub(p,isCur){const m=cfg.mode,a=[];
+ if(p.out)return t('out');
+ if(m==='fis')a.push('+'+cfg.inc+'s');
+ if(m==='byo')a.push(inOT(p)?`${t('byo')} ${p.periods}/${cfg.periods}`:`${cfg.periods}×${cfg.psec}s`);
+ if(m==='can')a.push(inOT(p)?`${p.moves} ${t('turns')||''}`.trim():`${cfg.mv}/${fmt(cfg.blk*1000)}`);
+ if(m==='bro'||m==='del')a.push(t('dly')+' '+cfg.dly+'s');
+ if(p.skip)a.push(t('skip'));
+ if(p.tOut&&cfg.timeout!=='lose')a.push(t('over'));
+ if(isCur&&g.started)a.push(t('thisTurn')+' '+fmt2(p.turnEl));
+ return a.join(' · ')}
+const fmt2=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+const stCls=p=>{const d=disp(p);return (p.out?' out':'')+(p.skip?' skip':'')+(p.tOut&&cfg.timeout==='neg'?' neg':'')+(d>0&&d<=10000?' low':'')};
+function panel(p,flip,ts){const isCur=g.order[g.cur]===p.seat;
+ return `<div class="panel${isCur?' act':''}${flip?' flip':''}${stCls(p)}" role="button" tabindex="0" data-seat="${p.seat}" style="--c:${p.color};--fg:${fg(p.color)};--ts:${ts}">
+ <div class="cbar"></div><div class="pname">${esc(p.name)}${isCur&&g.running?' · '+t('yourTurn'):''}</div>
+ <div class="ptime" data-time="${p.seat}">${fmt(dispShown(p))}</div><div class="psub" data-sub="${p.seat}">${esc(sub(p,isCur))}</div>
+ ${isCur&&g.running?`<div class="psub" style="opacity:.7">${t('tapEnd')}</div>`:''}</div>`}
+const dispShown=p=>{const d=disp(p);return cfg.timeout==='alert'&&d<0?0:d};
+function ctrls(){const L=g.p.length>=3;
+ return `<div class="ctrl"><span class="info">${t('round')} ${g.turnCount+1}</span>
+ <button data-act="g-pause">${g.running?t('pause'):t('resume')}</button><button data-act="g-adj">${t('adjust')}</button>
+ ${g.p.length>=2?`<button data-act="g-order">${t('order')}</button>`:''}${L?`<button data-act="g-lay">${t('lay')}: ${t(g.layout)}</button>`:''}
+ <button data-act="g-snd">${t('snd')}: ${cfg.sound?'ON':'OFF'}</button><button data-act="g-end">${t('end')}</button></div>`}
+function renderGame(){if(!g)return;const n=g.p.length,L=g.layout;let h='';
+ if(L==='solo'){h=`<div class="prow">${panel(g.p[0],false,'26vmin')}</div>${ctrls()}`}
+ else if(L==='split'){h=`<div class="prow">${panel(g.p[1],true,'22vmin')}</div>${ctrls()}<div class="prow">${panel(g.p[0],false,'22vmin')}</div>`}
+ else if(L==='ring'){const top=Math.floor(n/2),bot=n-top,ts=n<=4?'13vmin':'10vmin';
+  const botP=g.p.slice(0,bot),topP=g.p.slice(bot).reverse();
+  h=`<div class="prow">${topP.map(p=>panel(p,true,ts)).join('')}</div>${ctrls()}<div class="prow">${botP.map(p=>panel(p,false,ts)).join('')}</div>`}
+ else{const c=curP(),rest=[];for(let k=1;k<n;k++)rest.push(g.p[g.order[(g.cur+k)%n]]);
+  const nx=peekNext();
+  h=`${ctrls()}<div class="prow" style="flex:0 0 auto;min-height:30vh">${panel(c,false,'19vmin')}</div>
+  <div class="lbl" style="margin:0 4px">${t('upnext')}</div><div class="list">${rest.map(p=>`<div class="lrow${stCls(p)}" style="--c:${p.color}"><span class="d"></span><span class="n">${esc(p.name)}<span class="hint" style="display:block;margin:0" data-sub="${p.seat}">${esc(sub(p,false))}</span></span><span class="t" data-time="${p.seat}">${fmt(dispShown(p))}</span></div>`).join('')}</div>
+  <button class="next" data-act="g-next">${g.running?t('nextBtn')+' ›':(g.started?t('resume'):t('tapStart'))}<small>${g.running&&nx?'→ '+esc(nx.name):''}</small></button>`}
+ app.innerHTML=`<div class="game">${h}</div>${overlay()}`}
+function peekNext(){const save=g.cur,ov=g.nextOverride;advance();const p=curP();g.cur=save;g.nextOverride=ov;return p.seat===curP().seat?null:p}
+function paint(){for(const p of g.p){const isCur=g.order[g.cur]===p.seat;
+ document.querySelectorAll(`[data-time="${p.seat}"]`).forEach(e=>e.textContent=fmt(dispShown(p)));
+ document.querySelectorAll(`[data-sub="${p.seat}"]`).forEach(e=>e.textContent=sub(p,isCur&&!e.closest('.lrow')));
+ const el=document.querySelector(`.panel[data-seat="${p.seat}"]`);if(el){const d=disp(p);el.classList.toggle('low',d>0&&d<=10000);el.classList.toggle('neg',p.tOut&&cfg.timeout==='neg')}}
+ if(dialog==='adj')document.querySelectorAll('[data-adjt]').forEach(e=>e.textContent=fmt(dispShown(g.p[+e.dataset.adjt])))}
+function overlay(){
+ if(dialog==='order')return `<div class="ov"><div class="dlg"><h2>${t('orderT')}</h2>${g.order.map((s,pos)=>{const p=g.p[s];return `<div class="adj"><div class="n"><span class="dot" style="width:18px;height:18px;background:${p.color}"></span>${pos===g.cur?'▶ ':''}${esc(p.name)}${p.out?' · '+t('out'):''}${g.nextOverride===s?' · '+t('setNext'):''}</div>
+  <button data-act="o-up" data-i="${pos}" ${pos===0?'disabled':''}>↑</button><button data-act="o-down" data-i="${pos}" ${pos===g.order.length-1?'disabled':''}>↓</button>
+  <button data-act="o-skip" data-i="${s}" ${p.out?'disabled':''}>${p.skip?'✓ ':''}${t('skipT')}</button><button data-act="o-next" data-i="${s}" ${p.out||pos===g.cur?'disabled':''}>${t('setNext')}</button></div>`}).join('')}
+  <div class="acts"><button class="pri" data-act="d-close">${t('close')}</button></div></div></div>`;
+ if(dialog==='adj')return `<div class="ov"><div class="dlg"><h2>${t('adjT')}</h2>${g.p.map(p=>`<div class="adj"><div class="n"><span class="dot" style="width:18px;height:18px;background:${p.color}"></span>${esc(p.name)}<b data-adjt="${p.seat}">${fmt(dispShown(p))}</b></div>
+  ${[-60,-10,10,60].map(v=>`<button data-act="a-add" data-i="${p.seat}" data-v="${v}">${v>0?'+':''}${Math.abs(v)>=60?v/60+t('min'):v+t('sec')}</button>`).join('')}</div>`).join('')}
+  <div class="acts"><button class="pri" data-act="d-close">${t('close')}</button></div></div></div>`;
+ if(dialog==='end')return `<div class="ov"><div class="dlg"><h2>${t('endQ')}</h2><div class="acts"><button data-act="d-close">${t('cancel')}</button><button class="pri" data-act="d-end">${t('endY')}</button></div></div></div>`;
+ if(!g.running&&g.layout!=='list'){const f=curP();return `<div class="ov" data-act="d-run"><div class="dlg" style="text-align:center"><h2>${g.started?t('paused'):t('tapStart')}</h2>
+  ${g.started?'':`<div>${t('first')}: <b style="color:${f.color}">${esc(f.name)}</b></div>`}
+  <div class="acts"><button data-act="d-back">${t('back')}</button>${g.started?`<button data-act="g-end">${t('end')}</button>`:`<button data-act="g-order">${t('order')}</button>`}<button class="pri" data-act="d-run">${g.started?t('resume'):t('start')}</button></div></div></div>`}
+ return ''}
+function gameAct(a,b){if(!g)return;const i=+b.dataset.i,v=+b.dataset.v;
+ const A={'g-pause':()=>g.running?pause():run(),'g-next':()=>g.running?endTurn():run(),'d-run':()=>run(),
+ 'g-adj':()=>{dialog='adj';if(g.running)pause();else renderGame()},'g-order':()=>{dialog='order';if(g.running)pause();else renderGame()},
+ 'g-end':()=>{dialog='end';if(g.running)pause();else renderGame()},'d-end':()=>finish(),'d-close':()=>{dialog=null;renderGame()},
+ 'd-back':()=>{g=null;dialog=null;renderSetup()},
+ 'g-lay':()=>{g.layout=g.layout==='list'?'ring':'list';cfg.layout=g.layout;saveCfg();renderGame()},
+ 'g-snd':()=>{cfg.sound=!cfg.sound;saveCfg();renderGame()},
+ 'o-up':()=>{const o=g.order,c=o[g.cur];[o[i-1],o[i]]=[o[i],o[i-1]];g.cur=o.indexOf(c);renderGame()},
+ 'o-down':()=>{const o=g.order,c=o[g.cur];[o[i+1],o[i]]=[o[i],o[i+1]];g.cur=o.indexOf(c);renderGame()},
+ 'o-skip':()=>{g.p[i].skip=!g.p[i].skip;renderGame()},'o-next':()=>{g.nextOverride=i;renderGame()},
+ 'a-add':()=>{const p=g.p[i];if(inOT(p))p.byo+=v*1000;else p.main+=v*1000;if(disp(p)>0){p.tOut=false;p.over=0}renderGame()}};
+ if(A[a]){A[a]()}}
+app.addEventListener('pointerdown',e=>{if(!g||dialog)return;const pn=e.target.closest('.panel');if(!pn)return;
+ const seat=+pn.dataset.seat;if(g.running&&g.order[g.cur]===seat){e.preventDefault();endTurn()}});
+app.addEventListener('keydown',e=>{if(g&&g.running&&!dialog&&(e.key===' '||e.key==='Enter')&&e.target.closest('.panel')){e.preventDefault();endTurn()}});
+/* ---------- summary ---------- */
+function renderSummary(){const ps=g.p.slice(),mx=Math.max(1,...ps.map(p=>p.used));
+ const withT=ps.filter(p=>p.turns>0).map(p=>({p,avg:p.used/p.turns}));withT.sort((a,b)=>a.avg-b.avg);
+ const fast=withT[0],slow=withT[withT.length-1];ps.sort((a,b)=>a.used-b.used);
+ const mt=modeTxt();
+ app.innerHTML=`<div class="sum"><div><h1>${t('sumT')}</h1><div class="hint">${g.p.length}${cfg.lang==='zh'?'人':'P'} · ${esc((cfg.pname?cfg.pname+' · ':'')+mt)} · ${t('total')} ${fmt2(g.elapsed)} · ${g.turnCount} ${t('turns')}</div></div>
+ ${withT.length>1?`<div class="kp"><div><span>${t('fast')}</span><b>${esc(fast.p.name)} · ${t('avg')} ${fmt2(fast.avg)}</b></div><div><span>${t('slow')}</span><b>${esc(slow.p.name)} · ${t('avg')} ${fmt2(slow.avg)}</b></div></div>`:''}
+ ${ps.map(p=>{const lost=p.out&&p.timeouts;const rem=p.tOut?(cfg.timeout==='lose'?t('lostT'):t('otT')+' '+fmt2(p.over)):t('remain')+' '+fmt2(Math.max(0,disp(p)));
+  return `<div class="sc${lost?' lost':''}" style="--c:${p.color}"><div class="h"><span class="dot" style="width:14px;height:14px;background:${p.color}"></span><span class="n">${esc(p.name)}${lost?`<span class="tag">${t('lostT')}</span>`:''}</span><b>${fmt2(p.used)}</b></div>
+  <div class="bar"><i style="width:${(p.used/mx*100).toFixed(1)}%"></i></div>
+  <div class="m">${p.turns} ${t('turns')} · ${t('avg')} ${p.turns?fmt2(p.used/p.turns):'–'} · ${t('longest')} ${fmt2(p.longest)} · ${esc(rem)}${cfg.mode==='byo'&&p.pUsed?` · ${t('pUsed')} ${p.pUsed}${t('times')}`:''}${p.timeouts&&cfg.mode==='turn'?` · ${t('over')} ×${p.timeouts}`:''}</div></div>`}).join('')}
+ <div style="display:flex;gap:8px"><button class="chip" style="flex:1" data-act="h-copy" data-id="${lastRec.id}">${t('copy')}</button><button class="chip" style="flex:1" data-dl ${dlNS?'':'hidden'} data-act="h-csv" data-id="${lastRec.id}">${t('csv')}</button></div><div class="hint" style="margin:0">${t('saved')}</div>
+ <div class="acts" style="display:flex;gap:8px"><button class="chip" style="flex:1;min-height:52px" data-act="s-back">${t('back')}</button><button class="big" style="flex:1;height:52px" data-act="s-again">${t('again')}</button></div></div>`;
+ app.onclick=null}
+function modeTxt(){return t(cfg.mode)+(cfg.mode==='turn'?' '+fmt2(cfg.tsec*1000):' '+fmt2(cfg.main*1000))+(cfg.mode==='fis'?' +'+cfg.inc+'s':'')+(cfg.mode==='byo'?` ${cfg.periods}×${cfg.psec}s`:'')+(cfg.mode==='can'?` ${cfg.mv}/${fmt2(cfg.blk*1000)}`:'')+(cfg.mode==='bro'||cfg.mode==='del'?` ${cfg.dly}s`:'')}
+function buildRec(){const d=new Date(),pad=x=>String(x).padStart(2,'0');
+ return{id:Date.now().toString(36),date:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,name:cfg.pname||'',mode:modeTxt(),n:g.p.length,elapsed:Math.round(g.elapsed/1000),turns:g.turnCount,
+ players:g.p.slice().sort((a,b)=>a.used-b.used).map(p=>({name:p.name,color:p.color,used:Math.round(p.used/1000),turns:p.turns,avg:p.turns?Math.round(p.used/p.turns/1000):0,longest:Math.round(p.longest/1000),
+  res:p.tOut?(cfg.timeout==='lose'?t('lostT'):t('otT')+' '+fmt2(p.over)):t('remain')+' '+fmt2(Math.max(0,disp(p)))}))}}
+const s2=x=>fmt2(x*1000);
+function recText(r){return `${r.name||t('title')} · ${r.date}\n${r.mode} · ${r.n}${cfg.lang==='zh'?'人':'P'} · ${t('total')} ${s2(r.elapsed)} · ${r.turns} ${t('turns')}\n`+r.players.map((p,i)=>`${i+1}. ${p.name}  ${s2(p.used)} · ${p.turns} ${t('turns')} · ${t('avg')} ${s2(p.avg)} · ${t('longest')} ${s2(p.longest)} · ${p.res}`).join('\n')}
+const cq=v=>{v=String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+function recCSV(rs){const h=cfg.lang==='zh'?['日期','游戏','模式','人数','总长(秒)','总回合','玩家','颜色','用时(秒)','回合','平均(秒)','最长(秒)','结果']:['Date','Game','Mode','Players','Length(s)','Turns','Player','Colour','Used(s)','Turns','Avg(s)','Longest(s)','Result'];
+ const rows=[h];for(const r of rs)for(const p of r.players)rows.push([r.date,r.name,r.mode,r.n,r.elapsed,r.turns,p.name,p.color,p.used,p.turns,p.avg,p.longest,p.res]);
+ return rows.map(x=>x.map(cq).join(',')).join('\r\n')}
+async function dl(fn,text,btn){const data='﻿'+text,old=btn.textContent;
+ if(dlNS==='local'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'text/csv'}));a.download=fn;a.click();return}
+ try{await dlNS.save({filename:fn,data})}catch(e){btn.textContent=e&&e.code==='host_unavailable'?t('dlHost'):t('dlFail');setTimeout(()=>btn.textContent=old,2500)}}
+async function copyTxt(text,btn){const old=btn.textContent;let ok=false;try{await navigator.clipboard.writeText(text);ok=true}catch(e){try{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();ok=document.execCommand('copy');ta.remove()}catch(e2){}}
+ btn.textContent=ok?t('copied'):'×';setTimeout(()=>btn.textContent=old,1500)}
+function renderHistory(){stopTick();clearArm=false;
+ app.innerHTML=`<div class="sum"><div class="top"><h1>${t('histT')}</h1><button class="chip" data-act="h-back">${t('back')}</button></div>
+ ${hist.length?`<div style="display:flex;gap:8px"><button class="chip" style="flex:1" data-dl ${dlNS?'':'hidden'} data-act="h-all">${t('dlAll')}</button><button class="chip" style="flex:1;color:var(--bad)" data-act="h-clear">${t('clearAll')}</button></div>`:`<div class="hint">${t('noHist')}</div>`}
+ ${hist.map(r=>`<div class="sc"><div class="h"><span class="n">${esc(r.name||r.mode)}</span><span class="hint" style="margin:0">${esc(r.date)}</span></div>
+ <div class="m">${esc(r.mode)} · ${r.n}${cfg.lang==='zh'?'人':'P'} · ${t('total')} ${s2(r.elapsed)} · ${r.turns} ${t('turns')}</div>
+ ${r.players.map(p=>`<div class="m" style="display:flex;gap:8px;align-items:center"><span class="dot" style="width:12px;height:12px;background:${esc(p.color)};border:0"></span><span style="flex:1;color:var(--ink)">${esc(p.name)}</span><span>${s2(p.used)} · ${esc(p.res)}</span></div>`).join('')}
+ <div style="display:flex;gap:6px"><button class="chip" style="flex:1" data-act="h-copy" data-id="${esc(r.id)}">${t('copy')}</button><button class="chip" style="flex:1" data-dl ${dlNS?'':'hidden'} data-act="h-csv" data-id="${esc(r.id)}">CSV</button><button class="chip" style="flex:1" data-act="h-del" data-id="${esc(r.id)}">${t('del')}</button></div></div>`).join('')}</div>`}
+app.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,r=hist.find(x=>x.id===b.dataset.id);
+ if(a==='s-back'){g=null;renderSetup()}if(a==='s-again'){g=null;startGame()}
+ if(a==='h-open'){g=null;renderHistory()}if(a==='h-back'){renderSetup()}
+ if(a==='h-copy'&&r)copyTxt(recText(r),b);
+ if(a==='h-csv'&&r)dl(`game-${r.date.replace(/[: ]/g,'-')}.csv`,recCSV([r]),b);
+ if(a==='h-all')dl(`game-history-${hist.length}.csv`,recCSV(hist),b);
+ if(a==='h-del'){hist=hist.filter(x=>x.id!==b.dataset.id);ls.set('bgc.hist',hist);renderHistory()}
+ if(a==='h-clear'){if(clearArm){hist=[];ls.set('bgc.hist',hist);renderHistory()}else{clearArm=true;b.textContent=t('clearQ')}}});
+renderSetup();
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
